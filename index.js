@@ -3,6 +3,8 @@ const net = require('net');
 
 
 const server = net.createServer((socket) => {
+  var app = before(myapp,extractPathQuery);
+  app = after(app,jsonSerializeBody)
   socket.on('data',(data)=>{
     const res = app(parseRequest(data.toString()));
     socket.end(serialize(res));
@@ -19,20 +21,50 @@ server.listen({
   console.log('opened server on %j', address);
 });
 
-function app(req){
-  console.log(req.path)
-  if(req.path === "/"){
+function jsonSerializeBody(res){
+  if(!res.headers["Content-Type"]){
+    res.body=JSON.stringify(res.body);
+    res.headers["Content-Type"]="application/json";
+  }
+  return res;
+}
+
+function extractPathQuery(req){
+  const path = req.path;
+  const pathname = path.split("?")[0];
+  const query = path.slice(pathname.length+1,path.length);
+  req.queryString = query;
+  req.pathname = pathname;
+  return req;
+}
+
+function after(app,middle){
+  return (req)=>{
+    const res = app(req);
+    return middle(res);
+  }
+}
+
+function before(app,middle){
+  return (req)=>{
+    return app(middle(req));
+  }
+}
+
+function myapp(req){
+  console.log(req);
+  if(req.pathname === "/"){
     return {
       code:"200",
       headers:{"Content-Type":"text/plain"},
       body:"hello world"
       }
     }
-  else if(req.path === "/json"){
+  else if(req.pathname === "/json"){
     return {
       code:"200",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify(req)
+      headers:{},
+      body:req
       }
   }
   else {
